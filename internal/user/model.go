@@ -35,7 +35,7 @@ type UpdateUserDTO struct {
 	AvatarURL   string `json:"avatar_url"`
 }
 
-type Response struct {
+type UserResponse struct {
 	ID             uuid.UUID `json:"id"`
 	Username       string    `json:"username"`
 	DisplayName    string    `json:"display_name"`
