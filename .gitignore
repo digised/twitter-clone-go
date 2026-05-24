@@ -1,2 +1,5 @@
 ﻿.env
-.idea
+.env.local
+.env.*.local
+.idea/
+.DS_Store
