@@ -1,4 +1,6 @@
-﻿# Clean Architecture
+<img width="1483" height="1483" alt="X_icon_2" src="https://github.com/user-attachments/assets/19be35f8-1826-4468-84b9-d68164194e8b" />
+
+ # Clean Architecture
 
 > What each file does, why it exists, and how they work together
 
