@@ -1,6 +1,7 @@
-﻿package user
+package user
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -8,12 +9,37 @@ import (
 )
 
 type Service interface {
-	CreateUser(req CreateUserRequest) (*User, error)
-	Login(req LoginRequest) (string, *User, error)
-	GetByID(id uuid.UUID) (*User, error)
-	GetByUsername(username string) (*User, error)
-	UpdateUser(userID uuid.UUID, req UpdateUserRequest) (*User, error)
-	IsFollowing(followerID, followingID uuid.UUID) (bool, error)
+	CreateUser(
+		ctx context.Context,
+		req CreateUserRequest,
+	) (*User, error)
+
+	Login(
+		ctx context.Context,
+		req LoginRequest,
+	) (string, *User, error)
+
+	GetByID(
+		ctx context.Context,
+		id uuid.UUID,
+	) (*User, error)
+
+	GetByUsername(
+		ctx context.Context,
+		username string,
+	) (*User, error)
+
+	UpdateUser(
+		ctx context.Context,
+		userID uuid.UUID,
+		req UpdateUserRequest,
+	) (*User, error)
+
+	IsFollowing(
+		ctx context.Context,
+		followerID uuid.UUID,
+		followingID uuid.UUID,
+	) (bool, error)
 }
 
 type Handler struct {
@@ -49,7 +75,10 @@ func (h *Handler) Register(c *gin.Context) {
 		return
 	}
 
-	user, err := h.service.CreateUser(req)
+	user, err := h.service.CreateUser(
+		c.Request.Context(),
+		req,
+	)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
@@ -57,7 +86,10 @@ func (h *Handler) Register(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, ToUserResponse(*user))
+	c.JSON(
+		http.StatusCreated,
+		ToUserResponse(*user),
+	)
 }
 
 func (h *Handler) Login(c *gin.Context) {
@@ -70,7 +102,10 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 
-	token, user, err := h.service.Login(req)
+	token, user, err := h.service.Login(
+		c.Request.Context(),
+		req,
+	)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error": "invalid credentials",
@@ -87,7 +122,10 @@ func (h *Handler) Login(c *gin.Context) {
 func (h *Handler) GetProfile(c *gin.Context) {
 	username := c.Param("username")
 
-	user, err := h.service.GetByUsername(username)
+	user, err := h.service.GetByUsername(
+		c.Request.Context(),
+		username,
+	)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": "user not found",
@@ -105,16 +143,23 @@ func (h *Handler) GetProfile(c *gin.Context) {
 		viewerID, ok := userIDValue.(uuid.UUID)
 		if ok {
 			isOwnProfile = viewerID == user.ID
-
 			if !isOwnProfile {
-				isFollowing, _ = h.service.IsFollowing(viewerID, user.ID)
+				isFollowing, _ = h.service.IsFollowing(
+					c.Request.Context(),
+					viewerID,
+					user.ID,
+				)
 			}
 		}
 	}
 
 	c.JSON(
 		http.StatusOK,
-		ToUserProfileResponse(*user, isFollowing, isOwnProfile),
+		ToUserProfileResponse(
+			*user,
+			isFollowing,
+			isOwnProfile,
+		),
 	)
 }
 
@@ -144,7 +189,11 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 		return
 	}
 
-	user, err := h.service.UpdateUser(userID, req)
+	user, err := h.service.UpdateUser(
+		c.Request.Context(),
+		userID,
+		req,
+	)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
@@ -152,5 +201,8 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, ToUserResponse(*user))
+	c.JSON(
+		http.StatusOK,
+		ToUserResponse(*user),
+	)
 }
