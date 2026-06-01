@@ -1,52 +1,23 @@
 package user
 
 import (
-	"context"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
-type Service interface {
-	CreateUser(
-		ctx context.Context,
-		req CreateUserRequest,
-	) (*User, error)
-
-	Login(
-		ctx context.Context,
-		req LoginRequest,
-	) (string, *User, error)
-
-	GetByID(
-		ctx context.Context,
-		id uuid.UUID,
-	) (*User, error)
-
-	GetByUsername(
-		ctx context.Context,
-		username string,
-	) (*User, error)
-
-	UpdateUser(
-		ctx context.Context,
-		userID uuid.UUID,
-		req UpdateUserRequest,
-	) (*User, error)
-
-	IsFollowing(
-		ctx context.Context,
-		followerID uuid.UUID,
-		followingID uuid.UUID,
-	) (bool, error)
-}
+const ContextUserIDKey = "user_id"
 
 type Handler struct {
 	service Service
 }
 
 func NewHandler(service Service) *Handler {
+	if service == nil {
+		panic("user service is null")
+	}
+
 	return &Handler{
 		service: service,
 	}
@@ -58,6 +29,7 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 		users.GET("/:username", h.GetProfile)
 		users.PATCH("/me", h.UpdateProfile)
 	}
+
 	auth := rg.Group("/auth")
 	{
 		auth.POST("/register", h.Register)
@@ -138,17 +110,18 @@ func (h *Handler) GetProfile(c *gin.Context) {
 		isOwnProfile bool
 	)
 
-	userIDValue, exists := c.Get("user_id")
-	if exists {
-		viewerID, ok := userIDValue.(uuid.UUID)
-		if ok {
-			isOwnProfile = viewerID == user.ID
-			if !isOwnProfile {
-				isFollowing, _ = h.service.IsFollowing(
-					c.Request.Context(),
-					viewerID,
-					user.ID,
-				)
+	if viewerID, ok := getUserID(c); ok {
+		isOwnProfile = viewerID == user.ID
+
+		if !isOwnProfile {
+			isFollowing, err = h.service.IsFollowing(
+				c.Request.Context(),
+				viewerID,
+				user.ID,
+			)
+
+			if err != nil {
+				isFollowing = false
 			}
 		}
 	}
@@ -173,18 +146,10 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 		return
 	}
 
-	userIDValue, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "unauthorized",
-		})
-		return
-	}
-
-	userID, ok := userIDValue.(uuid.UUID)
+	userID, ok := getUserID(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "invalid user id",
+			"error": "unauthorized",
 		})
 		return
 	}
@@ -205,4 +170,18 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 		http.StatusOK,
 		ToUserResponse(*user),
 	)
+}
+
+func getUserID(c *gin.Context) (uuid.UUID, bool) {
+	value, exists := c.Get(ContextUserIDKey)
+	if !exists {
+		return uuid.Nil, false
+	}
+
+	userID, ok := value.(uuid.UUID)
+	if !ok {
+		return uuid.Nil, false
+	}
+
+	return userID, true
 }

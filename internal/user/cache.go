@@ -8,7 +8,12 @@ import (
 )
 
 type Cache interface {
-	SetUser(
+	SetUserByID(
+		ctx context.Context,
+		user *User,
+		ttl time.Duration,
+	) error
+	SetUserByUsername(
 		ctx context.Context,
 		user *User,
 		ttl time.Duration,
@@ -18,7 +23,6 @@ type Cache interface {
 		ctx context.Context,
 		id uuid.UUID,
 	) (*User, error)
-
 	GetUserByUsername(
 		ctx context.Context,
 		username string,
@@ -28,7 +32,6 @@ type Cache interface {
 		ctx context.Context,
 		id uuid.UUID,
 	) error
-
 	DeleteUserByUsername(
 		ctx context.Context,
 		username string,

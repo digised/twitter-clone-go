@@ -27,19 +27,14 @@ type Repository interface {
 		email string,
 	) (*User, error)
 
-	UsernameExists(
-		ctx context.Context,
-		username string,
-	) (bool, error)
-
-	EmailExists(
-		ctx context.Context,
-		email string,
-	) (bool, error)
-
 	Update(
 		ctx context.Context,
 		user *User,
+	) error
+
+	Delete(
+		ctx context.Context,
+		id uuid.UUID,
 	) error
 
 	UpdateProfile(
@@ -50,10 +45,15 @@ type Repository interface {
 		avatarURL *string,
 	) error
 
-	Delete(
+	UsernameExists(
 		ctx context.Context,
-		id uuid.UUID,
-	) error
+		username string,
+	) (bool, error)
+
+	EmailExists(
+		ctx context.Context,
+		email string,
+	) (bool, error)
 
 	IncrementFollowersCount(
 		ctx context.Context,
