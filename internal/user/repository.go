@@ -7,81 +7,13 @@ import (
 )
 
 type Repository interface {
-	Create(
-		ctx context.Context,
-		user *User,
-	) error
-
-	GetByID(
-		ctx context.Context,
-		id uuid.UUID,
-	) (*User, error)
-
-	GetByUsername(
-		ctx context.Context,
-		username string,
-	) (*User, error)
-
-	GetByEmail(
-		ctx context.Context,
-		email string,
-	) (*User, error)
-
-	Update(
-		ctx context.Context,
-		user *User,
-	) error
-
-	Delete(
-		ctx context.Context,
-		id uuid.UUID,
-	) error
-
-	UpdateProfile(
-		ctx context.Context,
-		id uuid.UUID,
-		displayName *string,
-		bio *string,
-		avatarURL *string,
-	) error
-
-	UsernameExists(
-		ctx context.Context,
-		username string,
-	) (bool, error)
-
-	EmailExists(
-		ctx context.Context,
-		email string,
-	) (bool, error)
-
-	IncrementFollowersCount(
-		ctx context.Context,
-		id uuid.UUID,
-	) error
-
-	DecrementFollowersCount(
-		ctx context.Context,
-		id uuid.UUID,
-	) error
-
-	IncrementFollowingCount(
-		ctx context.Context,
-		id uuid.UUID,
-	) error
-
-	DecrementFollowingCount(
-		ctx context.Context,
-		id uuid.UUID,
-	) error
-
-	IncrementTweetsCount(
-		ctx context.Context,
-		id uuid.UUID,
-	) error
-
-	DecrementTweetsCount(
-		ctx context.Context,
-		id uuid.UUID,
-	) error
+	Create(ctx context.Context, user *User) error
+	GetByID(ctx context.Context, id uuid.UUID) (*User, error)
+	GetByUsername(ctx context.Context, username string) (*User, error)
+	GetByEmail(ctx context.Context, email string) (*User, error)
+	UpdateProfile(ctx context.Context, id uuid.UUID, displayName *string, bio *string, avatarURL *string) (*User, error)
+	Delete(ctx context.Context, id uuid.UUID) error
+	UsernameExists(ctx context.Context, username string) (bool, error)
+	EmailExists(ctx context.Context, email string) (bool, error)
+	UpdateCounters(ctx context.Context, id uuid.UUID, followersDelta, followingDelta, tweetsDelta int64) error
 }

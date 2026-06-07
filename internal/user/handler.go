@@ -1,6 +1,7 @@
 package user
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -15,173 +16,90 @@ type Handler struct {
 
 func NewHandler(service Service) *Handler {
 	if service == nil {
-		panic("user service is null")
+		panic("user service is nil")
+	}
+	return &Handler{service: service}
+}
+
+func (h *Handler) RegisterRoutes(rg *gin.RouterGroup, authMiddleware gin.HandlerFunc) {
+	public := rg.Group("/users")
+	{
+		public.POST("", h.RegisterUser)
+		public.GET("/:username", h.GetProfile)
 	}
 
-	return &Handler{
-		service: service,
+	protected := rg.Group("/users")
+	protected.Use(authMiddleware)
+	{
+		protected.PATCH("/me", h.UpdateProfile)
 	}
 }
 
-func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
-	users := rg.Group("/users")
-	{
-		users.GET("/:username", h.GetProfile)
-		users.PATCH("/me", h.UpdateProfile)
-	}
-
-	auth := rg.Group("/auth")
-	{
-		auth.POST("/register", h.Register)
-		auth.POST("/login", h.Login)
-	}
-}
-
-func (h *Handler) Register(c *gin.Context) {
+func (h *Handler) RegisterUser(c *gin.Context) {
 	var req CreateUserRequest
-
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
-		})
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		return
 	}
 
-	user, err := h.service.CreateUser(
-		c.Request.Context(),
-		req,
-	)
+	user, err := h.service.CreateUser(c.Request.Context(), req)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
-		})
+		if errors.Is(err, ErrUsernameTaken) || errors.Is(err, ErrEmailTaken) {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 
-	c.JSON(
-		http.StatusCreated,
-		ToUserResponse(*user),
-	)
-}
-
-func (h *Handler) Login(c *gin.Context) {
-	var req LoginRequest
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
-		})
-		return
-	}
-
-	token, user, err := h.service.Login(
-		c.Request.Context(),
-		req,
-	)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "invalid credentials",
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, AuthResponse{
-		Token: token,
-		User:  ToUserResponse(*user),
-	})
+	c.JSON(http.StatusCreated, ToUserResponse(*user))
 }
 
 func (h *Handler) GetProfile(c *gin.Context) {
 	username := c.Param("username")
 
-	user, err := h.service.GetByUsername(
-		c.Request.Context(),
-		username,
-	)
+	user, err := h.service.GetByUsername(c.Request.Context(), username)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": "user not found",
-		})
+		if errors.Is(err, ErrNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 
-	var (
-		isFollowing  bool
-		isOwnProfile bool
-	)
-
-	if viewerID, ok := getUserID(c); ok {
-		isOwnProfile = viewerID == user.ID
-
-		if !isOwnProfile {
-			isFollowing, err = h.service.IsFollowing(
-				c.Request.Context(),
-				viewerID,
-				user.ID,
-			)
-
-			if err != nil {
-				isFollowing = false
-			}
-		}
-	}
-
-	c.JSON(
-		http.StatusOK,
-		ToUserProfileResponse(
-			*user,
-			isFollowing,
-			isOwnProfile,
-		),
-	)
+	c.JSON(http.StatusOK, ToUserResponse(*user))
 }
 
 func (h *Handler) UpdateProfile(c *gin.Context) {
 	var req UpdateUserRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
-		})
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		return
 	}
 
-	userID, ok := getUserID(c)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "unauthorized",
-		})
-		return
-	}
-
-	user, err := h.service.UpdateUser(
-		c.Request.Context(),
-		userID,
-		req,
-	)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
-		})
-		return
-	}
-
-	c.JSON(
-		http.StatusOK,
-		ToUserResponse(*user),
-	)
-}
-
-func getUserID(c *gin.Context) (uuid.UUID, bool) {
-	value, exists := c.Get(ContextUserIDKey)
+	userIDVal, exists := c.Get(ContextUserIDKey)
 	if !exists {
-		return uuid.Nil, false
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
 	}
 
-	userID, ok := value.(uuid.UUID)
+	userID, ok := userIDVal.(uuid.UUID)
 	if !ok {
-		return uuid.Nil, false
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user identity"})
+		return
 	}
 
-	return userID, true
+	user, err := h.service.UpdateUser(c.Request.Context(), userID, req)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+
+	c.JSON(http.StatusOK, ToUserResponse(*user))
 }
