@@ -1,11 +1,11 @@
 package application
 
 import (
-	_ "context"
 	"net/http"
 
 	"twitter-clone-go/internal/follow"
 	"twitter-clone-go/internal/user"
+	"twitter-clone-go/internal/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -37,7 +37,7 @@ func (h *UserProfileQueryHandler) Execute(c *gin.Context) {
 
 	u, err := h.userService.GetByUsername(c.Request.Context(), username)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		utils.RespondError(c, http.StatusNotFound, "user not found")
 		return
 	}
 
@@ -59,5 +59,5 @@ func (h *UserProfileQueryHandler) Execute(c *gin.Context) {
 		IsOwnProfile: isOwnProfile,
 	}
 
-	c.JSON(http.StatusOK, response)
+	utils.RespondOK(c, response)
 }
