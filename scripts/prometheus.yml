@@ -1,1 +1,8 @@
-﻿
+﻿global:
+  scrape_interval: 15s      # every 15 seconds pull metrics from all targets
+  evaluation_interval: 15s  # every 15 seconds evaluate alerting rules
+
+scrape_configs:
+  - job_name: "twitter-clone-api"
+    static_configs:
+      - targets: ["api:8080"]
