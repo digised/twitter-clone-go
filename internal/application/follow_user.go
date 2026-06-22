@@ -2,6 +2,7 @@ package application
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"twitter-clone-go/internal/follow"
@@ -15,16 +16,17 @@ import (
 type FollowUserHandler struct {
 	userService   user.Service
 	followService follow.Service
+	log           *slog.Logger
 }
 
-func NewFollowUserHandler(u user.Service, f follow.Service) *FollowUserHandler {
+func NewFollowUserHandler(u user.Service, f follow.Service, log *slog.Logger) *FollowUserHandler {
 	if u == nil {
 		panic("user service is nil")
 	}
 	if f == nil {
 		panic("follow service is nil")
 	}
-	return &FollowUserHandler{userService: u, followService: f}
+	return &FollowUserHandler{userService: u, followService: f, log: log}
 }
 
 func (h *FollowUserHandler) Follow(c *gin.Context) {
@@ -38,8 +40,12 @@ func (h *FollowUserHandler) Follow(c *gin.Context) {
 		return
 	}
 
-	_ = h.userService.HandleCounterUpdate(c.Request.Context(), followerID, 0, 1, 0)
-	_ = h.userService.HandleCounterUpdate(c.Request.Context(), target.ID, 1, 0, 0)
+	if err := h.userService.HandleCounterUpdate(c.Request.Context(), followerID, 0, 1, 0); err != nil {
+		h.log.Warn("failed to update following counter", "error", err, "user_id", followerID)
+	}
+	if err := h.userService.HandleCounterUpdate(c.Request.Context(), target.ID, 1, 0, 0); err != nil {
+		h.log.Warn("failed to update followers counter", "error", err, "user_id", target.ID)
+	}
 
 	utils.RespondStatusOK(c)
 }
@@ -55,8 +61,12 @@ func (h *FollowUserHandler) Unfollow(c *gin.Context) {
 		return
 	}
 
-	_ = h.userService.HandleCounterUpdate(c.Request.Context(), followerID, 0, -1, 0)
-	_ = h.userService.HandleCounterUpdate(c.Request.Context(), target.ID, -1, 0, 0)
+	if err := h.userService.HandleCounterUpdate(c.Request.Context(), followerID, 0, -1, 0); err != nil {
+		h.log.Warn("failed to update following counter", "error", err, "user_id", followerID)
+	}
+	if err := h.userService.HandleCounterUpdate(c.Request.Context(), target.ID, -1, 0, 0); err != nil {
+		h.log.Warn("failed to update followers counter", "error", err, "user_id", target.ID)
+	}
 
 	utils.RespondStatusOK(c)
 }
@@ -70,6 +80,7 @@ func (h *FollowUserHandler) resolve(c *gin.Context) (followerID uuid.UUID, targe
 
 	followerID, valid := userIDVal.(uuid.UUID)
 	if !valid {
+		h.log.Error("invalid user_id type in context", "value", userIDVal)
 		utils.RespondError(c, http.StatusInternalServerError, "invalid user identity")
 		return uuid.UUID{}, nil, false
 	}
@@ -82,6 +93,7 @@ func (h *FollowUserHandler) resolve(c *gin.Context) (followerID uuid.UUID, targe
 			utils.RespondError(c, http.StatusNotFound, "user not found")
 			return uuid.UUID{}, nil, false
 		}
+		h.log.Error("failed to resolve target user", "error", err, "username", username)
 		utils.RespondError(c, http.StatusInternalServerError, "internal server error")
 		return uuid.UUID{}, nil, false
 	}

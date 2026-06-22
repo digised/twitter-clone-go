@@ -2,7 +2,10 @@ package user
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
+
+	"twitter-clone-go/internal/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -12,13 +15,14 @@ const ContextUserIDKey = "user_id"
 
 type Handler struct {
 	service Service
+	log     *slog.Logger
 }
 
-func NewHandler(service Service) *Handler {
+func NewHandler(service Service, log *slog.Logger) *Handler {
 	if service == nil {
 		panic("user service is nil")
 	}
-	return &Handler{service: service}
+	return &Handler{service: service, log: log}
 }
 
 func (h *Handler) RegisterRoutes(rg *gin.RouterGroup, authMiddleware gin.HandlerFunc) {
@@ -38,21 +42,22 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup, authMiddleware gin.Handler
 func (h *Handler) RegisterUser(c *gin.Context) {
 	var req CreateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+		utils.RespondError(c, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 
 	user, err := h.service.CreateUser(c.Request.Context(), req)
 	if err != nil {
 		if errors.Is(err, ErrUsernameTaken) || errors.Is(err, ErrEmailTaken) {
-			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			utils.RespondError(c, http.StatusConflict, err.Error())
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		h.log.Error("unexpected error creating user", "error", err)
+		utils.RespondError(c, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
-	c.JSON(http.StatusCreated, ToUserResponse(*user))
+	utils.RespondCreated(c, ToUserResponse(*user))
 }
 
 func (h *Handler) GetProfile(c *gin.Context) {
@@ -61,45 +66,48 @@ func (h *Handler) GetProfile(c *gin.Context) {
 	user, err := h.service.GetByUsername(c.Request.Context(), username)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			utils.RespondError(c, http.StatusNotFound, "user not found")
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		h.log.Error("unexpected error fetching user profile", "error", err, "username", username)
+		utils.RespondError(c, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
-	c.JSON(http.StatusOK, ToUserResponse(*user))
+	utils.RespondOK(c, ToUserResponse(*user))
 }
 
 func (h *Handler) UpdateProfile(c *gin.Context) {
 	var req UpdateUserRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+		utils.RespondError(c, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 
 	userIDVal, exists := c.Get(ContextUserIDKey)
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		utils.RespondError(c, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
 	userID, ok := userIDVal.(uuid.UUID)
 	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user identity"})
+		h.log.Error("invalid user_id type in context", "value", userIDVal)
+		utils.RespondError(c, http.StatusInternalServerError, "invalid user identity")
 		return
 	}
 
 	user, err := h.service.UpdateUser(c.Request.Context(), userID, req)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			utils.RespondError(c, http.StatusNotFound, "user not found")
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		h.log.Error("unexpected error updating user profile", "error", err, "user_id", userID)
+		utils.RespondError(c, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
-	c.JSON(http.StatusOK, ToUserResponse(*user))
+	utils.RespondOK(c, ToUserResponse(*user))
 }

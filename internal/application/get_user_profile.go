@@ -1,6 +1,7 @@
 package application
 
 import (
+	"log/slog"
 	"net/http"
 
 	"twitter-clone-go/internal/follow"
@@ -14,6 +15,7 @@ import (
 type UserProfileQueryHandler struct {
 	userService   user.Service
 	followService follow.Service
+	log           *slog.Logger
 }
 
 type UserProfileResponse struct {
@@ -22,14 +24,14 @@ type UserProfileResponse struct {
 	IsOwnProfile bool `json:"is_own_profile"`
 }
 
-func NewUserProfileQueryHandler(u user.Service, f follow.Service) *UserProfileQueryHandler {
+func NewUserProfileQueryHandler(u user.Service, f follow.Service, log *slog.Logger) *UserProfileQueryHandler {
 	if u == nil {
 		panic("user service is nil")
 	}
 	if f == nil {
 		panic("follow service is nil")
 	}
-	return &UserProfileQueryHandler{userService: u, followService: f}
+	return &UserProfileQueryHandler{userService: u, followService: f, log: log}
 }
 
 func (h *UserProfileQueryHandler) Execute(c *gin.Context) {
@@ -48,7 +50,11 @@ func (h *UserProfileQueryHandler) Execute(c *gin.Context) {
 		if viewerID, ok := userIDVal.(uuid.UUID); ok {
 			isOwnProfile = viewerID == u.ID
 			if !isOwnProfile {
-				isFollowing, _ = h.followService.IsFollowing(c.Request.Context(), viewerID, u.ID)
+				var err error
+				isFollowing, err = h.followService.IsFollowing(c.Request.Context(), viewerID, u.ID)
+				if err != nil {
+					h.log.Warn("failed to check isFollowing", "error", err, "viewer_id", viewerID, "target_id", u.ID)
+				}
 			}
 		}
 	}

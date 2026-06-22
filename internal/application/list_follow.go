@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"twitter-clone-go/internal/follow"
@@ -16,16 +17,17 @@ import (
 type ListFollowHandler struct {
 	userService   user.Service
 	followService follow.Service
+	log           *slog.Logger
 }
 
-func NewListFollowHandler(u user.Service, f follow.Service) *ListFollowHandler {
+func NewListFollowHandler(u user.Service, f follow.Service, log *slog.Logger) *ListFollowHandler {
 	if u == nil {
 		panic("user service is nil")
 	}
 	if f == nil {
 		panic("follow service is nil")
 	}
-	return &ListFollowHandler{userService: u, followService: f}
+	return &ListFollowHandler{userService: u, followService: f, log: log}
 }
 
 func (h *ListFollowHandler) GetFollowers(c *gin.Context) {
@@ -48,6 +50,7 @@ func (h *ListFollowHandler) list(
 			utils.RespondError(c, http.StatusNotFound, "user not found")
 			return
 		}
+		h.log.Error("failed to resolve user for follow list", "error", err, "username", username)
 		utils.RespondError(c, http.StatusInternalServerError, "internal server error")
 		return
 	}
@@ -56,6 +59,7 @@ func (h *ListFollowHandler) list(
 
 	res, err := fn(c.Request.Context(), target.ID, p)
 	if err != nil {
+		h.log.Error("failed to list follows", "error", err, "user_id", target.ID)
 		utils.RespondError(c, http.StatusInternalServerError, "internal server error")
 		return
 	}
